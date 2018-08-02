@@ -128,7 +128,7 @@ void *thread0write(void *)
     char filename_prefix[5] = "IMU-";
     char filename[26];
 
-    chdir("/home/zed/lidar/data");
+    //chdir("/home/zed/lidar/data");
     construct_filename(filename_prefix,filename);
 
     fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
@@ -171,7 +171,7 @@ void *thread1write(void *)
     char filename_prefix[8] = "GPSRAW-";
     char filename[26];
 
-    chdir("/home/zed/lidar/data");
+    //chdir("/home/zed/lidar/data");
     construct_filename(filename_prefix,filename);
     
     fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
