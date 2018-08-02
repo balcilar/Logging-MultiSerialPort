@@ -11,8 +11,10 @@ $ gcc main.cpp -o test  -pthread
 
 ## Run
 
+Executables accept one additional argument which specify how many second wait before launching threads.
+
 ```
-$ ./test
+$ ./test 1
 ```
 
 
