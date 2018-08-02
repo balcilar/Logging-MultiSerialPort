@@ -7,7 +7,6 @@ Round robin buffer system was used in that code. Reader threads writes the data 
 
 ```
 $ gcc main.cpp -o test  -pthread
-
 ```
 
 ## Run
