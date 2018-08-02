@@ -1,3 +1,6 @@
+// Written by Muhammet Balcilar, France
+// All rights reserved
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
