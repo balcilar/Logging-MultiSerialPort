@@ -15,7 +15,12 @@
 #define BAUDRATE1 B115200
 char *portname0 = "/dev/ttySAC0";
 char *portname1 = "/dev/ttySAC2";
-
+char roundbuf0[262144];
+char roundbuf1[262144];
+int writeindex0=0;
+int writeindex1=0;
+int readindex0=0;
+int readindex1=0;
 
 void construct_filename(char *filename_prefix, char *filename)
 {
@@ -76,21 +81,7 @@ void construct_filename(char *filename_prefix, char *filename)
 void  *thread0(void *)
 {
         char buf[8192];
-        int fd, fd1, n;
-        char filename_prefix[5] = "IMU-";
-        char filename[26];
-        chdir("/home/lidar/data");
-
-        construct_filename(filename_prefix,filename);
-
-        fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-        fd = open(portname0, O_RDONLY | O_NOCTTY | O_NDELAY);
-
-        printf("Saving IMU data to file: ");
-
-        printf("%s \n",filename);
-        putchar('\n');
-
+        int fd, n;
         struct termios toptions;
 
         memset(&toptions, 0, sizeof(toptions));
@@ -113,37 +104,115 @@ void  *thread0(void *)
 
         while(1)
         {
-            n = read(fd, buf, 8192);
+            n = read(fd, buf, 8192);          
 
             if(n == -1) {
                 continue;
             }
-            write(fd1, buf, n);
+            
+            for (int i=0;i<n;i++)
+            {
+                roundbuf0[writeindex0]=buf[i];
+                writeindex0 =(writeindex0+1)%262144;
+            }
         }
 
         close(fd);
-        close(fd1);
+
+}
+
+void *thread0write(void *)
+{
+    char writebuf0[262144];
+    int fd, fd1, n;
+    char filename_prefix[5] = "IMU-";
+    char filename[26];
+
+    chdir("/home/zed/lidar/data");
+    construct_filename(filename_prefix,filename);
+
+    fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+
+    printf("Saving IMU data to file: ");
+    printf("%s \n",filename);
+    putchar('\n');
+
+    int k=0,l=0;
+    int sim=0;
+    while(1)
+    {
+        if (writeindex0==readindex0)
+           l=0; 
+        else
+        {
+            int tmp=writeindex0;
+            int tmp2=tmp;
+            if (tmp<readindex0)
+                tmp=tmp+262144;
+            k=0;
+            for (int i=readindex0;i<tmp;i++)
+            {
+                writebuf0[k]=roundbuf0[(i%262144)];
+                k++;
+            }
+            readindex0=tmp2;
+            write(fd1, writebuf0, k);
+        }
+    }
+
+    close(fd1);
+}
+
+void *thread1write(void *)
+{
+    char writebuf1[262144];
+
+    int fd, fd1, n;
+    char filename_prefix[8] = "GPSRAW-";
+    char filename[26];
+
+    chdir("/home/zed/lidar/data");
+    construct_filename(filename_prefix,filename);
+    
+    fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+
+
+    printf("Saving GPSRAW data to file: ");
+    printf("%s \n",filename);
+    putchar('\n');
+    int k=0,l=0;
+    int sim=0;
+    while(1)
+    {
+
+        if (writeindex1==readindex1)
+            l=0;
+        else
+        {
+            int tmp=writeindex1;
+            int tmp2=tmp;
+            if (tmp<readindex1)
+                tmp=tmp+262144;
+            k=0;
+            for (int i=readindex1;i<tmp;i++)
+            {
+                writebuf1[k]=roundbuf1[(i%262144)];
+                k++;
+            }
+            readindex1=tmp2;
+            write(fd1, writebuf1, k);
+        }
+    }
+
+
+    close(fd1);
 }
 
 void  *thread1(void *)
 {
-
-        char buf[8192];
-        int fd, fd1, n;
-        char filename_prefix[8] = "GPSRAW-";
-        char filename[26];
-
-        chdir("/home/lidar/data");
-        construct_filename(filename_prefix,filename);
-
-
-
-        fd1 = open(filename, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    char buf[8192];
+        int fd,n;
         fd = open(portname1, O_RDONLY | O_NOCTTY | O_NDELAY);
-
-        printf("Saving GPSRAW data to file: ");
-        printf("%s \n",filename);
-        putchar('\n');
 
         struct termios toptions;
 
@@ -164,30 +233,39 @@ void  *thread1(void *)
         tcsetattr(fd, TCSANOW, &toptions);
 
         tcflush(fd, TCIFLUSH);
-
+        int sim=0;
 
         while(1)
-        {
+        {            
 
-            n = read(fd, buf, 8192);
+            n = read(fd, buf,8192);
+            
             if(n == -1) {
                 continue;
             }
-            write(fd1, buf, n);
+            for (int i=0;i<n;i++)
+            {
+                roundbuf1[writeindex1]=buf[i];
+                writeindex1 =(writeindex1+1)%262144;
+            }
         }
 
-
         close(fd);
-        close(fd1);
 }
 
-
-
+void  *check(void *)
+{
+    while(1)
+    {
+        printf("%d   %d          ----------      %d    %d \n",writeindex0,readindex0,writeindex1,readindex1);
+        sleep(1);
+    }
+}
 
 int main(int argc, char *argv[])
 {
         int status,delay;
-        pthread_t tid0,tid1;
+        pthread_t tid0,tid1, wtid0,wtid1,ct;
         status=0;
 
         if (argc<2)
@@ -197,9 +275,16 @@ int main(int argc, char *argv[])
 
         sleep(delay);
 
+        pthread_create(&ct,NULL,check,NULL);
+        pthread_create(&wtid0,NULL,thread0write,NULL);
+        pthread_create(&wtid1,NULL,thread1write,NULL);
+
         pthread_create(&tid0,NULL,thread0,NULL);
         pthread_create(&tid1,NULL,thread1,NULL);
         pthread_join(tid0,NULL);
         pthread_join(tid1,NULL);
+        pthread_join(wtid0,NULL);
+        pthread_join(wtid1,NULL);
+        pthread_join(ct,NULL);
         return 0;
 }
